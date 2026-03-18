@@ -1,0 +1,28 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+    #- uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Build
+      run: docker --version
+      
+    - name: Build the Docker image
+      run: docker build -t web-scraper .
+
+    - name: verify Container Runs
+      run: docker run web-scraper --help || true
+      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
