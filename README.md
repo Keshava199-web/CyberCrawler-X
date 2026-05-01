@@ -1,201 +1,244 @@
-# 🕷️ CyberCrawler-X
+<div align="center">
 
-> A secure, automated web scraping tool for link extraction, availability monitoring, security header analysis, and structured report generation.
+<img src="Cyber_crawler.png" alt="CyberCrawler-X" width="120" />
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=flat-square&logo=python)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)
+# CyberCrawler-X
+
+**Automated web reconnaissance & attack surface analysis for security researchers**
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)]()
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-orange?style=flat-square)](CONTRIBUTING.md)
+
+[Features](#-features) · [Installation](#-installation) · [Usage](#-usage) · [Output](#-example-output) · [Disclaimer](#-disclaimer)
+
+</div>
 
 ---
 
-## 📖 Overview
+## What Is CyberCrawler-X?
 
-**CyberCrawler-X** is a Python-based web scraping and security analysis tool designed for automation, monitoring, and secure network handling. It extracts links from any webpage, verifies their availability via HTTP status checks, analyzes security headers, detects indicators of compromise (IOCs), and exports structured reports in multiple formats.
+CyberCrawler-X is a Python-based reconnaissance tool that automates the discovery phase of web security testing. Point it at a target and it crawls endpoints, detects sensitive data exposures, evaluates security headers, scans JavaScript files, and produces a structured report — giving you a clear picture of the attack surface before manual testing begins.
 
-Whether you're doing web reliability audits, security research, or reconnaissance, CyberCrawler-X gives you a complete picture of a target URL in one run.
+```
+$ python updated_scrap.py --url https://example.com
+
+Scraping completed successfully
+Links found : 48
+Summary     : {'2xx': 35, '3xx': 5, '4xx': 6, '5xx': 2, 'error': 0, 'blocked': 0}
+```
 
 ---
 
 ## ✨ Features
 
-### 🔗 Web Scraping
-- Extracts all links from any webpage
-- Automatically converts relative URLs to absolute URLs
-- Deduplicates links to eliminate noise
-- Supports large-scale extraction (up to 1,000 links)
+### 🗺️ Attack Surface Mapping
+- Extracts and deduplicates all `<a href>` links from a target page
+- Converts relative URLs to absolute URLs automatically
+- Handles up to **1,000 links per scan**
+- Falls back to **Playwright browser rendering** if no links are found via static HTML parsing (handles JS-heavy SPAs)
 
-### 📡 Link Monitoring
-Performs automated HTTP status checks and categorizes each response:
+### 🧩 JavaScript File Analysis
+- Extracts all `<script src="...">` files loaded by the page
+- Scans each JS file's source for sensitive data patterns (API keys, tokens, credentials)
+- Reports findings per JS file URL
 
-| Code Range | Meaning         |
-|------------|-----------------|
-| `2xx`      | Success         |
-| `3xx`      | Redirect        |
-| `4xx`      | Client Error    |
-| `5xx`      | Server Error    |
+### 🔍 Endpoint Discovery
+Scans page content with regex to surface high-interest paths:
 
-### 🔒 Security Features
-- **SSRF Protection** — Blocks server-side request forgery attempts
-- **DNS Rebinding Protection** — Guards against DNS rebinding attacks
-- **Redirect Validation** — Verifies redirect chains for safety
-- **Private Network Blocking** — Prevents access to internal/private IP ranges
-- **Content-Type Validation** — Ensures responses match expected types
-- **Response Size Limits** — Prevents memory exhaustion from oversized responses
+| Path pattern | Why it matters |
+|---|---|
+| `/api`, `/v1` | API surface |
+| `/auth` | Authentication flows |
+| `/admin` | Admin panels |
+| `/internal` | Internal tooling |
 
-### 🛡️ Security Header Analysis
-Detects the presence (or absence) of the following HTTP security headers:
+### 📡 HTTP Status Analysis
 
+HEAD requests (with GET fallback) are made against every discovered link:
+
+| Code | Classification |
+|------|---------------|
+| `2xx` | Accessible |
+| `3xx` | Redirect |
+| `4xx` | Client error / blocked |
+| `5xx` | Server error |
+| `blocked` | SSRF-blocked internal endpoint |
+
+### 🚨 Risk Classification
+
+| Risk | Trigger |
+|------|---------|
+| **HIGH** | Server errors (`5xx`) |
+| **MEDIUM** | Broken endpoints (`4xx`) or SSRF-blocked links |
+| **LOW** | Accessible endpoints (`2xx`/`3xx`) |
+
+PDF reports sort findings by risk level (HIGH → LOW).
+
+### 🔐 Built-in Security Guardrails
+- **SSRF protection** — validates hostnames against private/loopback/reserved IP ranges before every request, including link checks and JS downloads
+- **Redirect validation** — re-checks the final destination URL after any redirect chain
+- **DNS/IP validation** — blocks on resolution failure
+- **Response size cap** — streaming download aborts at 10 MB
+- **Content-Type enforcement** — HTML parsing only proceeds on `text/html` responses
+- **Query string redaction** — query params are stripped from log output
+- **Path traversal protection** — output filenames are sanitised with `Path.name`
+
+### 🕵️ Sensitive Data Detection
+
+Scans both page HTML and downloaded JS files for exposed patterns:
+
+| Pattern | Example |
+|---------|---------|
+| Email addresses | `user@example.com` |
+| AWS access keys | `AKIA...` |
+| JWT tokens | `eyJ...` |
+| API keys | `api_key=abc123...` |
+
+### 🌐 External Domain Identification
+Compares each discovered link's hostname against the target domain and returns a deduplicated list of third-party domains — useful for mapping the external attack surface and third-party integrations.
+
+### 🔎 Security Header Analysis
+Checks the target's response headers for the presence of:
 - `Content-Security-Policy`
 - `Strict-Transport-Security`
 - `X-Frame-Options`
 - `X-Content-Type-Options`
-- `Referrer-Policy`
-- `Permissions-Policy`
 
-### 🧩 IOC Detection
-Extracts potential **Indicators of Compromise (IOCs)** from page content, including:
+Missing headers are reported as `null` in output.
 
-- CVE identifiers (e.g., `CVE-2024-XXXXX`)
-- IP addresses
-- File hashes (MD5, SHA1, SHA256)
+### 📄 Structured Reporting
 
-### 📄 Multiple Output Formats
-Generate reports in any of the following formats:
-
-| Format | Flag           |
-|--------|----------------|
-| JSON   | `--format json` (default) |
-| TXT    | `--format txt` |
-| PDF    | `--format pdf` |
-| DOCX   | `--format docx` |
+| Format | Details |
+|--------|---------|
+| **JSON** | Full structured output — links, statuses, headers, sensitive data, JS findings, endpoints, external domains |
+| **PDF** | Executive summary, key findings callouts, risk-sorted findings table (top 30), report ID, timestamp, author branding |
 
 ---
 
-## 🏗️ Project Structure
+## 📁 Project Structure
 
 ```
 CyberCrawler-X/
-│
-├── scraper.py          # Core scraping and analysis logic
-├── requirements.txt    # Python dependencies
-├── README.md           # Project documentation
-└── output/             # Generated reports saved here
+├── updated_scrap.py   # Core tool
+├── output/            # Generated reports (auto-created)
+├── README.md
+└── logo.png           # Optional — used in reports
 ```
 
 ---
 
 ## ⚙️ Installation
 
-**1. Clone the repository**
 ```bash
 git clone https://github.com/yourusername/CyberCrawler-X.git
 cd CyberCrawler-X
-```
-
-**2. Install dependencies**
-```bash
 pip install -r requirements.txt
 ```
 
-### 📋 Requirements
+**Core dependencies:** `requests`, `beautifulsoup4`, `lxml`, `reportlab`
 
-- Python **3.8+**
-- Required libraries:
+**Optional (JS-rendered pages):**
+```bash
+pip install playwright
+playwright install chromium
+```
 
-```
-requests
-beautifulsoup4
-lxml
-reportlab
-python-docx
-urllib3
-```
+Playwright is only invoked automatically when static parsing returns zero links.
 
 ---
 
-## ▶️ Usage
+## 🚀 Usage
 
-**Basic scraping (JSON output by default)**
+**Basic scan — JSON output**
 ```bash
-python scraper.py --url https://example.com
+python updated_scrap.py --url https://example.com
 ```
 
-**Specify a custom output filename**
+**Custom JSON filename**
 ```bash
-python scraper.py --url https://example.com --output report
+python updated_scrap.py --url https://example.com --output result.json
 ```
 
-**Generate a PDF report**
+**Generate PDF report**
 ```bash
-python scraper.py --url https://example.com --format pdf
+python updated_scrap.py --url https://example.com --output report.pdf
 ```
 
-**Generate a DOCX report**
-```bash
-python scraper.py --url https://example.com --format docx
-```
-
-**Skip link status checking (faster execution)**
-```bash
-python scraper.py --url https://example.com --no-check
-```
+Output files are written to the `output/` directory.
 
 ---
 
 ## 📊 Example Output
 
-**Console summary**
+**Console**
 ```
-Scraping completed
+Scraping completed successfully
 Links found : 48
-Output file : output/results.json
-Summary     : {'2xx': 35, '3xx': 5, '4xx': 6, '5xx': 2, 'error': 0}
+Summary     : {'2xx': 35, '3xx': 5, '4xx': 6, '5xx': 2, 'error': 0, 'blocked': 0}
 ```
 
-**Example JSON result**
+**JSON structure**
 ```json
 {
   "target": "https://example.com",
   "links_found": 48,
-  "summary": {
-    "2xx": 35,
-    "3xx": 5,
-    "4xx": 6,
-    "5xx": 2,
-    "error": 0
-  },
+  "summary": { "2xx": 35, "3xx": 5, "4xx": 6, "5xx": 2, "error": 0, "blocked": 0 },
+  "links": [{ "text": "Login", "link": "https://example.com/auth", "status": 200 }],
   "security_headers": {
-    "Content-Security-Policy": "present",
-    "Strict-Transport-Security": "present",
-    "X-Frame-Options": "missing"
+    "Content-Security-Policy": null,
+    "Strict-Transport-Security": "max-age=31536000"
   },
-  "iocs_detected": {
-    "cve_ids": [],
-    "ip_addresses": ["192.168.1.1"],
-    "hashes": []
-  }
+  "sensitive_data": {},
+  "js_sensitive_data": {},
+  "endpoints": ["/api/v1/users", "/admin/dashboard"],
+  "external_domains": ["cdn.example.net", "analytics.google.com"],
+  "api_endpoints": []
 }
 ```
 
 ---
 
-## ⚠️ Disclaimer
+## 🎯 Bug Bounty Workflow
 
-This tool is intended for **authorized security research, web auditing, and educational purposes only**. Do not use CyberCrawler-X against websites or systems without explicit permission from the owner. The authors are not responsible for any misuse or damage caused by this tool.
+```
+1. Run CyberCrawler-X against your target scope
+2. Review discovered endpoints, external domains, and security header gaps
+3. Check sensitive_data and js_sensitive_data for immediate findings
+4. Prioritize HIGH/MEDIUM risk links for manual follow-up
+5. Manually validate and report confirmed vulnerabilities
+```
+
+> CyberCrawler-X automates reconnaissance. All findings require manual validation before reporting.
 
 ---
 
-## 📜 License
+## ⚠️ Disclaimer
 
-This project is licensed under the [MIT License](LICENSE).
+This tool is intended for **authorized security research, bug bounty programs, and educational use only**.
+
+Do not use CyberCrawler-X against any system without explicit written permission. The author assumes no liability for unauthorized or malicious use.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome!  
-Feel free to open an [issue](https://github.com/yourusername/CyberCrawler-X/issues) or submit a pull request.
+Contributions are welcome. Please:
+1. Open an issue to discuss your proposed change
+2. Fork the repo and create a feature branch
+3. Submit a pull request with a clear description
 
 ---
 
-<p align="center">Built with 🐍 Python • Designed for Security-Conscious Developers</p>
+## 📜 License
+
+[MIT](LICENSE) — free to use, modify, and distribute with attribution.
+
+---
+
+<div align="center">
+
+Built with Python · Designed for Security Researchers
+
+</div>
